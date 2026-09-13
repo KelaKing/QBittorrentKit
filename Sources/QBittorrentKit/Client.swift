@@ -28,7 +28,7 @@ public actor QBittorrentClient {
             method: "POST",
             form: [("username", username), ("password", password)]
         )
-        guard response.text == "Ok." else {
+        guard response.text.isEmpty || response.text == "Ok." else {
             throw QBittorrentError.authenticationFailed(response.text.nilIfEmpty)
         }
     }

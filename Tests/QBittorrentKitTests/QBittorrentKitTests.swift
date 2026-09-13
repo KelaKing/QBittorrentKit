@@ -8,7 +8,7 @@ import Testing
 @Suite struct QBittorrentKitTests {
     @Test func loginEncodesCredentialsAndPreservesProxyPrefixAndCookie() async throws {
         let transport = StubTransport([
-            .init(body: "Ok.", headers: ["Set-Cookie": "SID=secret; Path=/proxy; HttpOnly"]),
+            .init(body: "", headers: ["Set-Cookie": "SID=secret; Path=/proxy; HttpOnly"]),
             .init(body: "v5.2.3")
         ])
         let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test/proxy/")), transport: transport)
