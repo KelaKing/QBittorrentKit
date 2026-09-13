@@ -115,7 +115,7 @@ import Testing
         let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
 
         await #expect(throws: QBittorrentError.self) {
-            try await client.delete(.hashes(["abc"]), deleteFiles: false)
+            try await client.delete(.hashes([String(repeating: "a", count: 40)]), deleteFiles: false)
         }
     }
 
@@ -165,7 +165,7 @@ import Testing
         let modernTransport = StubTransport([.init(body: "2.11.0"), .init(body: ""), .init(body: "")])
         let modern = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: modernTransport)
         try await modern.start(.all)
-        try await modern.stop(.hashes(["abc"]))
+        try await modern.stop(.hashes([String(repeating: "a", count: 40)]))
         let modernRequests = await modernTransport.requests
         #expect(modernRequests.map(\.url?.path) == ["/api/v2/app/webapiVersion", "/api/v2/torrents/start", "/api/v2/torrents/stop"])
 
@@ -193,14 +193,46 @@ import Testing
         let transport = StubTransport([.init(body: ""), .init(body: ""), .init(body: "")])
         let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
 
-        try await client.delete(.hashes(["a", "b"]), deleteFiles: true)
+        let firstHash = String(repeating: "a", count: 40)
+        let secondHash = String(repeating: "b", count: 40)
+        try await client.delete(.hashes([firstHash, secondHash]), deleteFiles: true)
         try await client.setGlobalDownloadLimit(0)
         try await client.setTorrentUploadLimit(1_024, for: .all)
 
         let requests = await transport.requests
-        #expect(requests[0].bodyText == "hashes=a%7Cb&deleteFiles=true")
+        #expect(requests[0].bodyText == "hashes=\(firstHash)%7C\(secondHash)&deleteFiles=true")
         #expect(requests[1].bodyText == "limit=0")
         #expect(requests[2].bodyText == "hashes=all&limit=1024")
+    }
+
+    @Test func explicitHashSelectionRejectsReservedAllValue() async throws {
+        let transport = StubTransport([])
+        let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
+
+        await #expect(throws: QBittorrentError.self) {
+            try await client.delete(.hashes(["all"]), deleteFiles: true)
+        }
+        #expect((await transport.requests).isEmpty)
+    }
+
+    @Test func multipartFilenameRejectsHeaderInjection() async throws {
+        let transport = StubTransport([])
+        let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
+
+        await #expect(throws: QBittorrentError.self) {
+            try await client.add(torrent: Data([1]), filename: "safe.torrent\r\nX-Bad: yes")
+        }
+        #expect((await transport.requests).isEmpty)
+    }
+
+    @Test func webAPIVersionComparisonAndHashingNormalizeTrailingZeros() {
+        let short = WebAPIVersion("2.11")
+        let long = WebAPIVersion("2.11.0")
+
+        #expect(short == long)
+        #expect(Set([short, long]).count == 1)
+        #expect(!(short < long))
+        #expect(!(long < short))
     }
 
     @Test func plainTextJSONAndHTTPFailuresAreDistinguished() async throws {

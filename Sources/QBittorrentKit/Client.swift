@@ -116,6 +116,9 @@ public actor QBittorrentClient {
         options: AddTorrentOptions = .init()
     ) async throws {
         guard !data.isEmpty else { throw QBittorrentError.invalidRequest("Torrent data cannot be empty.") }
+        guard !filename.isEmpty, filename.unicodeScalars.allSatisfy({ $0.value >= 0x20 && $0.value != 0x7F }) else {
+            throw QBittorrentError.invalidRequest("Torrent filename cannot be empty or contain control characters.")
+        }
         let boundary = "QBittorrentKit-\(UUID().uuidString)"
         let fields = try await addOptionFields(options)
         let body = MultipartFormData(boundary: boundary)
@@ -416,15 +419,24 @@ public actor QBittorrentClient {
         case .all:
             return "all"
         case let .hashes(hashes):
-            guard !hashes.isEmpty, hashes.allSatisfy({ !$0.isEmpty }) else {
-                throw QBittorrentError.invalidRequest("Torrent selection must contain at least one non-empty hash.")
+            guard !hashes.isEmpty else {
+                throw QBittorrentError.invalidRequest("Torrent selection must contain at least one hash.")
             }
+            try hashes.forEach(validateHash)
             return hashes.joined(separator: "|")
         }
     }
 
     private func validateHash(_ hash: String) throws {
-        guard !hash.isEmpty else { throw QBittorrentError.invalidRequest("Torrent hash cannot be empty.") }
+        let validLength = hash.count == 40 || hash.count == 64
+        let isHex = hash.unicodeScalars.allSatisfy {
+            (0x30...0x39).contains($0.value)
+                || (0x41...0x46).contains($0.value)
+                || (0x61...0x66).contains($0.value)
+        }
+        guard validLength, isHex else {
+            throw QBittorrentError.invalidRequest("Torrent hashes must be complete 40- or 64-character hexadecimal values.")
+        }
     }
 
     private func validateRate(_ value: Int64) throws {

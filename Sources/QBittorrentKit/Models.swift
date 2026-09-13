@@ -14,16 +14,30 @@ public struct WebAPIVersion: RawRepresentable, Codable, Sendable, Hashable, Comp
     }
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
-        let count = max(lhs.components.count, rhs.components.count)
+        let count = max(lhs.normalizedComponents.count, rhs.normalizedComponents.count)
         for index in 0..<count {
-            let left = index < lhs.components.count ? lhs.components[index] : 0
-            let right = index < rhs.components.count ? rhs.components[index] : 0
+            let left = index < lhs.normalizedComponents.count ? lhs.normalizedComponents[index] : 0
+            let right = index < rhs.normalizedComponents.count ? rhs.normalizedComponents[index] : 0
             if left != right { return left < right }
         }
         return false
     }
 
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.normalizedComponents == rhs.normalizedComponents
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(normalizedComponents)
+    }
+
     public var description: String { rawValue }
+
+    private var normalizedComponents: [Int] {
+        var result = components
+        while result.last == 0 { result.removeLast() }
+        return result
+    }
 
     public init(from decoder: Decoder) throws {
         self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
