@@ -177,6 +177,18 @@ import Testing
         #expect(legacyRequests.map(\.url?.path) == ["/api/v2/app/webapiVersion", "/api/v2/torrents/resume", "/api/v2/torrents/pause"])
     }
 
+    @Test func stoppedFilterMapsToLegacyPausedFilter() async throws {
+        let transport = StubTransport([.init(body: "2.9.3"), .init(body: "[]")])
+        let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
+
+        _ = try await client.torrents(options: .init(filter: .stopped))
+
+        let requests = await transport.requests
+        let url = try #require(requests[1].url)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(components.queryItems?.first(where: { $0.name == "filter" })?.value == "paused")
+    }
+
     @Test func deleteAndRateLimitEncodeSafeExplicitValues() async throws {
         let transport = StubTransport([.init(body: ""), .init(body: ""), .init(body: "")])
         let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)

@@ -59,7 +59,18 @@ public actor QBittorrentClient {
             throw QBittorrentError.invalidRequest("Torrent list limit cannot be negative.")
         }
         var query: [URLQueryItem] = []
-        if let filter = options.filter { query.append(.init(name: "filter", value: filter.rawValue)) }
+        if let filter = options.filter {
+            let value: String
+            switch filter {
+            case .stopped:
+                value = try await webAPIVersion() >= Self.startStopVersion ? "stopped" : "paused"
+            case .running:
+                value = try await webAPIVersion() >= Self.startStopVersion ? "running" : "resumed"
+            default:
+                value = filter.rawValue
+            }
+            query.append(.init(name: "filter", value: value))
+        }
         if let category = options.category { query.append(.init(name: "category", value: category)) }
         if let tag = options.tag { query.append(.init(name: "tag", value: tag)) }
         if let sort = options.sort { query.append(.init(name: "sort", value: sort.rawValue)) }
@@ -207,6 +218,12 @@ public actor QBittorrentClient {
     public func removeTags(_ tags: [String], from selection: TorrentSelection) async throws {
         var form = try selectionForm(selection)
         form.append(("tags", try joined(tags, label: "tags")))
+        try await expectOK(path: "torrents/removeTags", form: form)
+    }
+
+    public func removeAllTags(from selection: TorrentSelection) async throws {
+        var form = try selectionForm(selection)
+        form.append(("tags", ""))
         try await expectOK(path: "torrents/removeTags", form: form)
     }
 
@@ -486,7 +503,10 @@ private extension HTTPCookie {
         let cookieDomain = domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
         let domainMatches = host == cookieDomain || host.hasSuffix("." + cookieDomain)
         let requestPath = url.path.isEmpty ? "/" : url.path
-        return domainMatches && requestPath.hasPrefix(path) && (!isSecure || url.scheme?.lowercased() == "https")
+        let pathMatches = requestPath == path
+            || (requestPath.hasPrefix(path)
+                && (path.hasSuffix("/") || requestPath.dropFirst(path.count).first == "/"))
+        return domainMatches && pathMatches && (!isSecure || url.scheme?.lowercased() == "https")
     }
 }
 
