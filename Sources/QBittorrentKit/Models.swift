@@ -307,6 +307,37 @@ public struct Category: Codable, Sendable, Equatable {
     }
 }
 
+public struct CategoryPatch: Codable, Sendable, Equatable {
+    public let name: String?
+    public let savePath: String?
+
+    public init(name: String? = nil, savePath: String? = nil) {
+        self.name = name
+        self.savePath = savePath
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case savePath = "savePath"
+    }
+}
+
+public struct CategorySnapshot: Sendable, Equatable {
+    public let key: String
+    public var name: String?
+    public var savePath: String?
+
+    public init(key: String, patch: CategoryPatch) {
+        self.key = key
+        apply(patch)
+    }
+
+    public mutating func apply(_ patch: CategoryPatch) {
+        if let value = patch.name { name = value }
+        if let value = patch.savePath { savePath = value }
+    }
+}
+
 public struct TransferInfo: Codable, Sendable, Equatable {
     public let downloadSpeed: Int64?
     public let uploadSpeed: Int64?
@@ -327,12 +358,36 @@ public struct TransferInfo: Codable, Sendable, Equatable {
     }
 }
 
+public struct TransferInfoSnapshot: Sendable, Equatable {
+    public var downloadSpeed: Int64?
+    public var uploadSpeed: Int64?
+    public var downloaded: Int64?
+    public var uploaded: Int64?
+    public var downloadRateLimit: Int64?
+    public var uploadRateLimit: Int64?
+    public var connectionStatus: String?
+
+    public init(_ update: TransferInfo) {
+        apply(update)
+    }
+
+    public mutating func apply(_ update: TransferInfo) {
+        if let value = update.downloadSpeed { downloadSpeed = value }
+        if let value = update.uploadSpeed { uploadSpeed = value }
+        if let value = update.downloaded { downloaded = value }
+        if let value = update.uploaded { uploaded = value }
+        if let value = update.downloadRateLimit { downloadRateLimit = value }
+        if let value = update.uploadRateLimit { uploadRateLimit = value }
+        if let value = update.connectionStatus { connectionStatus = value }
+    }
+}
+
 public struct MainData: Codable, Sendable, Equatable {
     public let rid: Int
     public let fullUpdate: Bool
     public let torrents: [String: TorrentPatch]?
     public let torrentsRemoved: [String]?
-    public let categories: [String: Category]?
+    public let categories: [String: CategoryPatch]?
     public let categoriesRemoved: [String]?
     public let tags: [String]?
     public let tagsRemoved: [String]?
@@ -343,7 +398,7 @@ public struct MainData: Codable, Sendable, Equatable {
         fullUpdate: Bool,
         torrents: [String: TorrentPatch]? = nil,
         torrentsRemoved: [String]? = nil,
-        categories: [String: Category]? = nil,
+        categories: [String: CategoryPatch]? = nil,
         categoriesRemoved: [String]? = nil,
         tags: [String]? = nil,
         tagsRemoved: [String]? = nil,
@@ -375,7 +430,7 @@ public struct MainData: Codable, Sendable, Equatable {
         fullUpdate = try container.decodeIfPresent(Bool.self, forKey: .fullUpdate) ?? false
         torrents = try container.decodeIfPresent([String: TorrentPatch].self, forKey: .torrents)
         torrentsRemoved = try container.decodeIfPresent([String].self, forKey: .torrentsRemoved)
-        categories = try container.decodeIfPresent([String: Category].self, forKey: .categories)
+        categories = try container.decodeIfPresent([String: CategoryPatch].self, forKey: .categories)
         categoriesRemoved = try container.decodeIfPresent([String].self, forKey: .categoriesRemoved)
         tags = try container.decodeIfPresent([String].self, forKey: .tags)
         tagsRemoved = try container.decodeIfPresent([String].self, forKey: .tagsRemoved)
@@ -386,9 +441,9 @@ public struct MainData: Codable, Sendable, Equatable {
 public struct MainDataSnapshot: Sendable, Equatable {
     public private(set) var rid = 0
     public private(set) var torrents: [String: TorrentSnapshot] = [:]
-    public private(set) var categories: [String: Category] = [:]
+    public private(set) var categories: [String: CategorySnapshot] = [:]
     public private(set) var tags: Set<String> = []
-    public private(set) var serverState: TransferInfo?
+    public private(set) var serverState: TransferInfoSnapshot?
 
     public init() {}
 
@@ -408,13 +463,27 @@ public struct MainDataSnapshot: Sendable, Equatable {
             }
         }
         for hash in update.torrentsRemoved ?? [] { torrents.removeValue(forKey: hash) }
-        for (name, category) in update.categories ?? [:] { categories[name] = category }
+        for (key, patch) in update.categories ?? [:] {
+            if var existing = categories[key] {
+                existing.apply(patch)
+                categories[key] = existing
+            } else {
+                categories[key] = CategorySnapshot(key: key, patch: patch)
+            }
+        }
         for name in update.categoriesRemoved ?? [] { categories.removeValue(forKey: name) }
         if let newTags = update.tags {
             if update.fullUpdate { tags = Set(newTags) } else { tags.formUnion(newTags) }
         }
         tags.subtract(update.tagsRemoved ?? [])
-        if let state = update.serverState { serverState = state }
+        if let state = update.serverState {
+            if var existing = serverState, !update.fullUpdate {
+                existing.apply(state)
+                serverState = existing
+            } else {
+                serverState = TransferInfoSnapshot(state)
+            }
+        }
         rid = update.rid
     }
 }

@@ -161,6 +161,24 @@ import Testing
         #expect(update.torrents?["a"]?.downloadSpeed == 0)
     }
 
+    @Test func syncAccumulatorMergesPartialCategoriesAndServerState() async throws {
+        let transport = StubTransport([
+            .init(body: #"{"rid":1,"full_update":true,"categories":{"movies":{"name":"movies","savePath":"/old"}},"server_state":{"dl_info_speed":10,"up_info_speed":20,"connection_status":"connected"}}"#),
+            .init(body: #"{"rid":2,"categories":{"movies":{"savePath":"/new"}},"server_state":{"dl_info_speed":0}}"#)
+        ])
+        let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
+        var snapshot = MainDataSnapshot()
+
+        snapshot.apply(try await client.mainData())
+        snapshot.apply(try await client.mainData(since: snapshot.rid))
+
+        #expect(snapshot.categories["movies"]?.name == "movies")
+        #expect(snapshot.categories["movies"]?.savePath == "/new")
+        #expect(snapshot.serverState?.downloadSpeed == 0)
+        #expect(snapshot.serverState?.uploadSpeed == 20)
+        #expect(snapshot.serverState?.connectionStatus == "connected")
+    }
+
     @Test func startStopRoutesByCachedWebAPIVersion() async throws {
         let modernTransport = StubTransport([.init(body: "2.11.0"), .init(body: ""), .init(body: "")])
         let modern = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: modernTransport)
