@@ -103,6 +103,16 @@ public actor QBittorrentClient {
         return try await json(path: "torrents/files", query: query)
     }
 
+    public func torrentTrackers(hash: String) async throws -> [TorrentTracker] {
+        try validateHash(hash)
+        return try await json(path: "torrents/trackers", query: [.init(name: "hash", value: hash)])
+    }
+
+    public func torrentPieceStates(hash: String) async throws -> [TorrentPieceState] {
+        try validateHash(hash)
+        return try await json(path: "torrents/pieceStates", query: [.init(name: "hash", value: hash)])
+    }
+
     public func add(urls: [String], options: AddTorrentOptions = .init()) async throws {
         guard !urls.isEmpty else { throw QBittorrentError.invalidRequest("At least one URL is required.") }
         var form = [("urls", urls.joined(separator: "\n"))]
@@ -162,6 +172,10 @@ public actor QBittorrentClient {
 
     public func recheck(_ selection: TorrentSelection) async throws {
         try await expectOK(path: "torrents/recheck", form: try selectionForm(selection))
+    }
+
+    public func reannounce(_ selection: TorrentSelection) async throws {
+        try await expectOK(path: "torrents/reannounce", form: try selectionForm(selection))
     }
 
     public func setForceStart(_ enabled: Bool, for selection: TorrentSelection) async throws {

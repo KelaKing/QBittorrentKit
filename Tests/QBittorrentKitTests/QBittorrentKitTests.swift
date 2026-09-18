@@ -53,7 +53,7 @@ import Testing
     }
 
     @Test func listBuildsEncodedTypedQueryAndDecodesUnknownState() async throws {
-        let transport = StubTransport([.init(body: #"[{"hash":"abc","name":"测试","state":"futureState","progress":0}]"#)])
+        let transport = StubTransport([.init(body: #"[{"hash":"abc","name":"测试","state":"futureState","progress":0,"availability":1.5}]"#)])
         let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test/qbt")), transport: transport)
 
         let torrents = try await client.torrents(options: .init(
@@ -68,6 +68,7 @@ import Testing
         ))
 
         #expect(torrents[0].state.rawValue == "futureState")
+        #expect(torrents[0].availability == 1.5)
         let requests = await transport.requests
         let requestURL = try #require(requests[0].url)
         let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
@@ -117,6 +118,46 @@ import Testing
         await #expect(throws: QBittorrentError.self) {
             try await client.delete(.hashes([String(repeating: "a", count: 40)]), deleteFiles: false)
         }
+    }
+
+    @Test func torrentDetailsDecodeAndBuildExpectedRequests() async throws {
+        let hash = String(repeating: "a", count: 40)
+        let propertiesJSON = #"{"save_path":"/downloads","creation_date":10,"piece_size":4096,"comment":"release","total_wasted":1,"total_uploaded":2,"total_downloaded":3,"up_limit":4,"dl_limit":5,"total_uploaded_session":6,"total_downloaded_session":7,"time_elapsed":8,"seeding_time":9,"nb_connections":10,"nb_connections_limit":11,"share_ratio":1.25,"addition_date":12,"completion_date":13,"created_by":"tool","dl_speed_avg":14,"dl_speed":15,"eta":16,"last_seen":17,"peers":18,"peers_total":19,"pieces_have":20,"pieces_num":21,"reannounce":22,"seeds":23,"seeds_total":24,"total_size":25,"up_speed_avg":26,"up_speed":27,"isPrivate":true}"#
+        let trackersJSON = #"[{"url":"https://tracker.test/announce","status":2,"tier":0,"num_peers":3,"num_seeds":4,"num_leeches":5,"num_downloaded":6,"msg":"ok"}]"#
+        let transport = StubTransport([
+            .init(body: propertiesJSON),
+            .init(body: trackersJSON),
+            .init(body: "[0,1,2]"),
+            .init(body: "")
+        ])
+        let client = try QBittorrentClient(baseURL: #require(URL(string: "https://example.test")), transport: transport)
+
+        let properties = try await client.torrentProperties(hash: hash)
+        let trackers = try await client.torrentTrackers(hash: hash)
+        let pieces = try await client.torrentPieceStates(hash: hash)
+        try await client.reannounce(.hashes([hash]))
+
+        #expect(properties.totalDownloadedSession == 7)
+        #expect(properties.connectionLimit == 11)
+        #expect(properties.averageDownloadSpeed == 14)
+        #expect(properties.piecesCount == 21)
+        #expect(properties.isPrivate == true)
+        #expect(trackers[0].status == .working)
+        #expect(trackers[0].seeds == 4)
+        #expect(pieces == [.missing, .downloading, .downloaded])
+
+        let requests = await transport.requests
+        #expect(requests.map(\.url?.path) == [
+            "/api/v2/torrents/properties",
+            "/api/v2/torrents/trackers",
+            "/api/v2/torrents/pieceStates",
+            "/api/v2/torrents/reannounce"
+        ])
+        for request in requests.prefix(3) {
+            let components = try #require(request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) })
+            #expect(components.queryItems?.first(where: { $0.name == "hash" })?.value == hash)
+        }
+        #expect(requests[3].bodyText == "hashes=\(hash)")
     }
 
     @Test func syncAccumulatorMergesExplicitValuesAndRemovalsThenResets() {

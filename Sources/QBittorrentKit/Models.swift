@@ -128,6 +128,7 @@ public struct Torrent: Codable, Sendable, Equatable {
     public let size: Int64?
     public let totalSize: Int64?
     public let progress: Double?
+    public let availability: Double?
     public let downloadSpeed: Int64?
     public let uploadSpeed: Int64?
     public let downloaded: Int64?
@@ -142,7 +143,7 @@ public struct Torrent: Codable, Sendable, Equatable {
     public let forceStart: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case hash, name, state, size, progress, downloaded, uploaded, eta, ratio, category, tags
+        case hash, name, state, size, progress, availability, downloaded, uploaded, eta, ratio, category, tags
         case totalSize = "total_size"
         case downloadSpeed = "dlspeed"
         case uploadSpeed = "upspeed"
@@ -159,6 +160,7 @@ public struct TorrentPatch: Codable, Sendable, Equatable {
     public var size: Int64?
     public var totalSize: Int64?
     public var progress: Double?
+    public var availability: Double?
     public var downloadSpeed: Int64?
     public var uploadSpeed: Int64?
     public var downloaded: Int64?
@@ -176,6 +178,7 @@ public struct TorrentPatch: Codable, Sendable, Equatable {
         size: Int64? = nil,
         totalSize: Int64? = nil,
         progress: Double? = nil,
+        availability: Double? = nil,
         downloadSpeed: Int64? = nil,
         uploadSpeed: Int64? = nil,
         downloaded: Int64? = nil,
@@ -192,6 +195,7 @@ public struct TorrentPatch: Codable, Sendable, Equatable {
         self.size = size
         self.totalSize = totalSize
         self.progress = progress
+        self.availability = availability
         self.downloadSpeed = downloadSpeed
         self.uploadSpeed = uploadSpeed
         self.downloaded = downloaded
@@ -205,7 +209,7 @@ public struct TorrentPatch: Codable, Sendable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, state, size, progress, downloaded, uploaded, eta, ratio, category, tags
+        case name, state, size, progress, availability, downloaded, uploaded, eta, ratio, category, tags
         case totalSize = "total_size"
         case downloadSpeed = "dlspeed"
         case uploadSpeed = "upspeed"
@@ -221,6 +225,7 @@ public struct TorrentSnapshot: Sendable, Equatable {
     public var size: Int64?
     public var totalSize: Int64?
     public var progress: Double?
+    public var availability: Double?
     public var downloadSpeed: Int64?
     public var uploadSpeed: Int64?
     public var downloaded: Int64?
@@ -243,6 +248,7 @@ public struct TorrentSnapshot: Sendable, Equatable {
         if let value = patch.size { size = value }
         if let value = patch.totalSize { totalSize = value }
         if let value = patch.progress { progress = value }
+        if let value = patch.availability { availability = value }
         if let value = patch.downloadSpeed { downloadSpeed = value }
         if let value = patch.uploadSpeed { uploadSpeed = value }
         if let value = patch.downloaded { downloaded = value }
@@ -266,9 +272,34 @@ public struct TorrentProperties: Codable, Sendable, Equatable {
     public let totalDownloaded: Int64?
     public let uploadLimit: Int64?
     public let downloadLimit: Int64?
+    public let totalUploadedSession: Int64?
+    public let totalDownloadedSession: Int64?
+    public let timeElapsed: Int64?
+    public let seedingTime: Int64?
+    public let connections: Int?
+    public let connectionLimit: Int?
+    public let shareRatio: Double?
+    public let additionDate: Int64?
+    public let completionDate: Int64?
+    public let createdBy: String?
+    public let averageDownloadSpeed: Int64?
+    public let downloadSpeed: Int64?
+    public let eta: Int64?
+    public let lastSeen: Int64?
+    public let peers: Int?
+    public let totalPeers: Int?
+    public let piecesHave: Int?
+    public let piecesCount: Int?
+    public let reannounce: Int64?
+    public let seeds: Int?
+    public let totalSeeds: Int?
+    public let totalSize: Int64?
+    public let averageUploadSpeed: Int64?
+    public let uploadSpeed: Int64?
+    public let isPrivate: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case comment
+        case comment, eta, peers, reannounce, seeds, isPrivate
         case savePath = "save_path"
         case creationDate = "creation_date"
         case pieceSize = "piece_size"
@@ -277,6 +308,26 @@ public struct TorrentProperties: Codable, Sendable, Equatable {
         case totalDownloaded = "total_downloaded"
         case uploadLimit = "up_limit"
         case downloadLimit = "dl_limit"
+        case totalUploadedSession = "total_uploaded_session"
+        case totalDownloadedSession = "total_downloaded_session"
+        case timeElapsed = "time_elapsed"
+        case seedingTime = "seeding_time"
+        case connections = "nb_connections"
+        case connectionLimit = "nb_connections_limit"
+        case shareRatio = "share_ratio"
+        case additionDate = "addition_date"
+        case completionDate = "completion_date"
+        case createdBy = "created_by"
+        case averageDownloadSpeed = "dl_speed_avg"
+        case downloadSpeed = "dl_speed"
+        case lastSeen = "last_seen"
+        case totalPeers = "peers_total"
+        case piecesHave = "pieces_have"
+        case piecesCount = "pieces_num"
+        case totalSeeds = "seeds_total"
+        case totalSize = "total_size"
+        case averageUploadSpeed = "up_speed_avg"
+        case uploadSpeed = "up_speed"
     }
 }
 
@@ -294,6 +345,70 @@ public struct TorrentFile: Codable, Sendable, Equatable {
         case index, name, size, progress, priority, availability
         case isSeed = "is_seed"
         case pieceRange = "piece_range"
+    }
+}
+
+public struct TorrentTracker: Codable, Sendable, Equatable {
+    public let url: String
+    public let status: TorrentTrackerStatus
+    public let tier: Int?
+    public let peers: Int?
+    public let seeds: Int?
+    public let leeches: Int?
+    public let downloaded: Int?
+    public let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url, status, tier
+        case peers = "num_peers"
+        case seeds = "num_seeds"
+        case leeches = "num_leeches"
+        case downloaded = "num_downloaded"
+        case message = "msg"
+    }
+}
+
+public struct TorrentTrackerStatus: RawRepresentable, Codable, Sendable, Hashable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let disabled = Self(rawValue: 0)
+    public static let notContacted = Self(rawValue: 1)
+    public static let working = Self(rawValue: 2)
+    public static let updating = Self(rawValue: 3)
+    public static let error = Self(rawValue: 4)
+
+    public init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(Int.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+public struct TorrentPieceState: RawRepresentable, Codable, Sendable, Hashable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let missing = Self(rawValue: 0)
+    public static let downloading = Self(rawValue: 1)
+    public static let downloaded = Self(rawValue: 2)
+
+    public init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(Int.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
